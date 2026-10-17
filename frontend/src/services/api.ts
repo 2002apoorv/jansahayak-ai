@@ -7,17 +7,44 @@ import type {
   UserProfile,
 } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const RAW_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').trim();
+// Strip trailing slashes and any inadvertent trailing '/api' from the base URL
+export const API_BASE_URL = RAW_BASE_URL
+  ? RAW_BASE_URL.replace(/\/+$/, '').replace(/\/api$/, '')
+  : '';
+
+function endpoint(path: string): string {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `${API_BASE_URL}${cleanPath}`;
+}
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    let errorDetail = 'API request failed';
+    let errorDetail = '';
     try {
       const errJson = await res.json();
-      errorDetail = errJson.detail || errJson.message || errorDetail;
+      errorDetail = errJson.detail || errJson.message || '';
     } catch {
-      errorDetail = `HTTP ${res.status}: ${res.statusText}`;
+      // Body is not JSON
     }
+
+    if (!errorDetail) {
+      if (res.status === 404) {
+        const isLocal = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+        if (!API_BASE_URL && !isLocal) {
+          errorDetail = 'Backend URL (VITE_API_BASE_URL) is not configured in Vercel project environment variables.';
+        } else {
+          errorDetail = `Endpoint not found (HTTP 404). Please ensure the backend is running and the route exists.`;
+        }
+      } else if (res.status === 502 || res.status === 503 || res.status === 504) {
+        errorDetail = 'Backend is waking up (Render free tier spin-up takes ~30-45s) or temporarily unavailable. Please retry in a few seconds.';
+      } else {
+        errorDetail = `HTTP ${res.status}: ${res.statusText || 'Request failed'}`;
+      }
+    } else if (errorDetail === 'Not Found') {
+      errorDetail = 'Backend service returned 404 Not Found. Please verify the backend URL format and route.';
+    }
+
     throw new Error(errorDetail);
   }
   return res.json();
@@ -36,17 +63,18 @@ export const api = {
     if (params?.level) query.append('level', params.level);
     if (params?.search) query.append('search', params.search);
 
-    const res = await fetch(`${API_BASE_URL}/api/schemes?${query.toString()}`);
+    const qs = query.toString();
+    const res = await fetch(endpoint(`/api/schemes${qs ? `?${qs}` : ''}`));
     return handleResponse<SchemeSummary[]>(res);
   },
 
   async getSchemeDetail(id: string): Promise<Scheme> {
-    const res = await fetch(`${API_BASE_URL}/api/schemes/${encodeURIComponent(id)}`);
+    const res = await fetch(endpoint(`/api/schemes/${encodeURIComponent(id)}`));
     return handleResponse<Scheme>(res);
   },
 
   async getCategories(): Promise<CategoryMeta[]> {
-    const res = await fetch(`${API_BASE_URL}/api/categories`);
+    const res = await fetch(endpoint('/api/categories'));
     return handleResponse<CategoryMeta[]>(res);
   },
 
@@ -60,7 +88,7 @@ export const api = {
       matched_passages: string[];
     }>;
   }> {
-    const res = await fetch(`${API_BASE_URL}/api/schemes/search`, {
+    const res = await fetch(endpoint('/api/schemes/search'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, category, state, top_k: 6 }),
@@ -69,7 +97,7 @@ export const api = {
   },
 
   async evaluateEligibility(profile: UserProfile, schemeIds?: string[]): Promise<EligibilityEvaluationResponse> {
-    const res = await fetch(`${API_BASE_URL}/api/eligibility/evaluate`, {
+    const res = await fetch(endpoint('/api/eligibility/evaluate'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ profile, scheme_ids: schemeIds }),
@@ -88,7 +116,7 @@ export const api = {
       match_score: number;
     }>;
   }> {
-    const res = await fetch(`${API_BASE_URL}/api/schemes/match`, {
+    const res = await fetch(endpoint('/api/schemes/match'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ profile, category }),
@@ -97,7 +125,7 @@ export const api = {
   },
 
   async askQuestion(question: string, language: string = 'en', categoryFilter?: string): Promise<AskResponse> {
-    const res = await fetch(`${API_BASE_URL}/api/ask`, {
+    const res = await fetch(endpoint('/api/ask'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -110,7 +138,7 @@ export const api = {
   },
 
   async getHealth(): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/health`);
+    const res = await fetch(endpoint('/health'));
     return handleResponse(res);
   },
 };

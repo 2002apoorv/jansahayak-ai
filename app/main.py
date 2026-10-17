@@ -43,15 +43,25 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS Middleware restricted to configured frontend origins
-_is_wildcard = "*" in settings.ALLOWED_ORIGINS
+import re
+
+# CORS Middleware allowing universal access for public civic portals
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
-    allow_credentials=not _is_wildcard,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def clean_double_slash_middleware(request: Request, call_next):
+    """Normalize repeated slashes (e.g., //api/ask -> /api/ask) from misconfigured client base URLs."""
+    raw_path = request.scope.get("path", "")
+    if "//" in raw_path:
+        request.scope["path"] = re.sub(r"/+", "/", raw_path)
+    return await call_next(request)
 
 
 @app.exception_handler(Exception)

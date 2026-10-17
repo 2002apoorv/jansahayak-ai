@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: jansahayak-api
+    runtime: python
+    buildCommand: "pip install --no-cache-dir -r requirements.txt"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.12
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: FRONTEND_ORIGIN
+        value: "*"

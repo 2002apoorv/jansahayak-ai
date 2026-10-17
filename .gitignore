@@ -23,5 +23,3 @@ dist/
 
 # Large Generated Artifacts & Local Logs
 *.log
-data/vector_index/
-data/processed/

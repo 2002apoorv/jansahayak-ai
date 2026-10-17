@@ -44,11 +44,12 @@ app = FastAPI(
 )
 
 # CORS Middleware restricted to configured frontend origins
+_is_wildcard = "*" in settings.ALLOWED_ORIGINS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_credentials=not _is_wildcard,
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
